@@ -10,6 +10,8 @@ const double dotSize = 70;
 final orbitalRingKey = GlobalKey();
 late Box appDataBox;
 late Box<Dot> dotsBox;
+const double selectionThreshold = 10;
+Dot? selectedDot; // currently selected dot id
 
 class DotsModel extends ChangeNotifier {
   List<Dot> dots = [];
@@ -18,6 +20,11 @@ class DotsModel extends ChangeNotifier {
 
   void addDot(Dot value) {
     dots.add(value);
+    notifyListeners();
+  }
+
+  void updateDot(int index, Dot newValue) {
+    dots[index] = newValue;
     notifyListeners();
   }
 }
@@ -62,6 +69,19 @@ Widget orbitApp() {
       builder: (context, child) => Listener(
             onPointerHover: (event) {
               Provider.of<MousePositionModel>(context, listen: false).mousePositionX = event.localPosition.dx;
+              var newlySelectedDot = Provider.of<DotsModel>(context, listen: false).dots.where(
+                (element) {
+                  if (element.angle != null) {
+                    return (element.angle! - (event.localPosition.dx % 360)).abs() < selectionThreshold;
+                  } else {
+                    return false;
+                  }
+                },
+              ).firstOrNull;
+              if (newlySelectedDot != null && selectedDot != newlySelectedDot) {
+                selectedDot = newlySelectedDot;
+                loadInfo(selectedDot!);
+              }
             },
             onPointerDown: (event) async {
               // print(event.buttons);
@@ -74,6 +94,11 @@ Widget orbitApp() {
               await Hive.box("appDataBox").put("totalDotCount", totalDotCount + 1);
 
               if (context.mounted) Provider.of<DotsModel>(context, listen: false).addDot(newDot);
+
+              selectedDot = newDot;
+
+              titleInputController.text = "";
+              titleInputFocusNode.requestFocus();
             },
             child: MaterialApp(
               theme: ThemeData(scaffoldBackgroundColor: Colors.white, fontFamily: "SFPro"),
@@ -88,7 +113,7 @@ Widget orbitApp() {
                           flex: 2,
                           child: OrbitView(),
                         ),
-                        Expanded(flex: 1, child: panelView())
+                        Expanded(flex: 1, child: panelView(context))
                       ],
                     ),
                   ),
@@ -96,6 +121,11 @@ Widget orbitApp() {
               ),
             ),
           ));
+}
+
+void loadInfo(Dot dot) {
+  titleInputController.text = dot.title ?? "";
+  contentInputController.text = dot.content ?? "";
 }
 
 class OrbitView extends StatelessWidget {
@@ -119,18 +149,21 @@ class OrbitView extends StatelessWidget {
           alignment: Alignment.center,
           children: [
                 orbitalRing(),
-                dot()
+                dotWidget()
               ] +
               dmValue.dots
                   .map(
-                    (e) => dot(angle: e.angle),
+                    (e) => dotWidget(
+                      angle: e.angle,
+                      title: e.title,
+                    ),
                   )
                   .toList() +
               [
                 Consumer<MousePositionModel>(
                   builder: (context, mpmValue, child) {
                     // print(value.mousePositionX);
-                    return dot(angle: mpmValue.mousePositionX, color: Colors.black, backgroundColor: Colors.transparent);
+                    return dotWidget(angle: mpmValue.mousePositionX, color: Colors.black, backgroundColor: Colors.transparent);
                   },
                 )
               ]);
@@ -148,12 +181,16 @@ Widget orbitalRing() {
   );
 }
 
-Widget dot({double? angle, Color color = Colors.grey, Color backgroundColor = Colors.white}) {
+Widget dotWidget({double? angle, Color color = Colors.grey, Color backgroundColor = Colors.white, String? title}) {
   final container = Container(
     width: dotSize,
     height: dotSize,
     decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(width: 3, color: color), color: backgroundColor),
-    child: const Center(),
+    child: Center(
+        child: Text(
+      title ?? "",
+      textAlign: TextAlign.center,
+    )),
   );
 
   if (angle == null) {

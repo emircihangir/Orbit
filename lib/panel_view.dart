@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:orbit/main.dart';
+import 'package:provider/provider.dart';
 
 FocusNode titleInputFocusNode = FocusNode();
 FocusNode contentInputFocusNode = FocusNode();
@@ -6,16 +8,25 @@ FocusNode contentInputFocusNode = FocusNode();
 final titleInputController = TextEditingController();
 final contentInputController = TextEditingController();
 
-Widget panelView() {
+Widget panelView(BuildContext context) {
   titleInputFocusNode.addListener(
     () {
-      if (titleInputFocusNode.hasFocus == false) print(titleInputController.text);
+      if (titleInputFocusNode.hasFocus == false && selectedDot != null) {
+        final updatedDot = selectedDot;
+        updatedDot!.title = titleInputController.text;
+        dotsBox.put(selectedDot!.id, updatedDot);
+        final dots = Provider.of<DotsModel>(context, listen: false).dots;
+        Provider.of<DotsModel>(context, listen: false).updateDot(dots.indexOf(selectedDot!), updatedDot);
+      }
     },
   );
 
   contentInputFocusNode.addListener(
     () {
-      if (contentInputFocusNode.hasFocus == false) print(contentInputController.text);
+      if (contentInputFocusNode.hasFocus == false && selectedDot != null) {
+        selectedDot!.content = contentInputController.text;
+        dotsBox.put(selectedDot!.id, selectedDot!);
+      }
     },
   );
 
