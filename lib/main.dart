@@ -1,27 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:math';
+import 'package:hive/hive.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dot.dart';
 
 const double dotSize = 70;
 final orbitalRingKey = GlobalKey();
-
-class Dot {
-  String id;
-  String? title;
-  String? content;
-  double? angle;
-  String? childOf;
-  List<String>? children;
-
-  Dot({required this.id, this.title, this.content, this.angle, this.childOf, this.children});
-}
+late Box appDataBox;
+late Box<Dot> dotsBox;
 
 class DotsModel extends ChangeNotifier {
-  List<Dot> _dots = [];
-  List<Dot> get dots => _dots;
+  List<Dot> dots = [];
+
+  DotsModel({required this.dots});
 
   void addDot(Dot value) {
-    _dots.add(value);
+    dots.add(value);
     notifyListeners();
   }
 }
@@ -44,46 +39,59 @@ class MousePositionModel extends ChangeNotifier {
   }
 }
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final appDocumentDirectory = await getApplicationDocumentsDirectory();
+  Hive.init(appDocumentDirectory.path);
+  Hive.registerAdapter(DotAdapter());
+
+  appDataBox = await Hive.openBox("appDataBox");
+  dotsBox = await Hive.openBox<Dot>("dotsBox");
+
   runApp(orbitApp());
 }
 
 Widget orbitApp() {
   return MultiProvider(
-    providers: [
-      ChangeNotifierProvider(create: (context) => OrbitalRingRadiusModel()),
-      ChangeNotifierProvider(create: (context) => MousePositionModel()),
-      ChangeNotifierProvider(create: (context) => DotsModel())
-    ],
-    builder: (context, child) => Listener(
-      onPointerHover: (event) {
-        Provider.of<MousePositionModel>(context, listen: false).mousePositionX = event.localPosition.dx;
-      },
-      onPointerDown: (event) {
-        // print(event.buttons);
-        double newDotsAngle = Provider.of<MousePositionModel>(context, listen: false).mousePositionX % 360;
-        Dot newDot = Dot(id: "someid", angle: newDotsAngle);
-        Provider.of<DotsModel>(context, listen: false).addDot(newDot);
-      },
-      child: MaterialApp(
-        theme: ThemeData(scaffoldBackgroundColor: Colors.white),
-        home: Scaffold(
-          body: MouseRegion(
-            cursor: SystemMouseCursors.none,
-            child: Row(
-              children: [
-                const Expanded(
-                  flex: 2,
-                  child: OrbitView(),
+      providers: [
+        ChangeNotifierProvider(create: (context) => OrbitalRingRadiusModel()),
+        ChangeNotifierProvider(create: (context) => MousePositionModel()),
+        ChangeNotifierProvider(create: (context) => DotsModel(dots: dotsBox.values.toList()))
+      ],
+      builder: (context, child) => Listener(
+            onPointerHover: (event) {
+              Provider.of<MousePositionModel>(context, listen: false).mousePositionX = event.localPosition.dx;
+            },
+            onPointerDown: (event) async {
+              // print(event.buttons);
+              double newDotsAngle = Provider.of<MousePositionModel>(context, listen: false).mousePositionX % 360;
+              final int totalDotCount = Hive.box("appDataBox").get("totalDotCount");
+              final String newDotID = "dot-${totalDotCount + 1}";
+              Dot newDot = Dot(id: newDotID, angle: newDotsAngle);
+
+              await Hive.box<Dot>("dotsBox").put(newDotID, newDot);
+              await Hive.box("appDataBox").put("totalDotCount", totalDotCount + 1);
+
+              if (context.mounted) Provider.of<DotsModel>(context, listen: false).addDot(newDot);
+            },
+            child: MaterialApp(
+              theme: ThemeData(scaffoldBackgroundColor: Colors.white),
+              home: Scaffold(
+                body: MouseRegion(
+                  cursor: SystemMouseCursors.none,
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        flex: 2,
+                        child: OrbitView(),
+                      ),
+                      Expanded(flex: 1, child: panelView())
+                    ],
+                  ),
                 ),
-                Expanded(flex: 1, child: panelView())
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
-    ),
-  );
+          ));
 }
 
 class OrbitView extends StatelessWidget {
@@ -95,27 +103,34 @@ class OrbitView extends StatelessWidget {
       final RenderBox renderBox = orbitalRingKey.currentContext?.findRenderObject() as RenderBox;
       final size = renderBox.size;
 
-      //TODO: update on resize.
       if (size.height < size.width) {
         Provider.of<OrbitalRingRadiusModel>(context, listen: false).orbitalRingRadius = size.height / 2;
       } else {
         Provider.of<OrbitalRingRadiusModel>(context, listen: false).orbitalRingRadius = size.width / 2;
       }
     });
-    return Stack(
-      alignment: Alignment.center,
-      children: [
-        orbitalRing(),
-        dot(),
-        dot(angle: 315),
-        Consumer<MousePositionModel>(
-          builder: (context, value, child) {
-            // print(value.mousePositionX);
-            return dot(angle: value.mousePositionX, color: Colors.black, backgroundColor: Colors.transparent);
-          },
-        )
-      ],
-    );
+
+    return Consumer<DotsModel>(builder: (context, dmValue, child) {
+      return Stack(
+          alignment: Alignment.center,
+          children: [
+                orbitalRing(),
+                dot()
+              ] +
+              dmValue.dots
+                  .map(
+                    (e) => dot(angle: e.angle),
+                  )
+                  .toList() +
+              [
+                Consumer<MousePositionModel>(
+                  builder: (context, mpmValue, child) {
+                    // print(value.mousePositionX);
+                    return dot(angle: mpmValue.mousePositionX, color: Colors.black, backgroundColor: Colors.transparent);
+                  },
+                )
+              ]);
+    });
   }
 }
 
