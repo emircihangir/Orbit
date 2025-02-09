@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:hive/hive.dart';
 import 'package:path_provider/path_provider.dart';
 import 'dot.dart';
+import 'panel_view.dart';
 
 const double dotSize = 70;
 final orbitalRingKey = GlobalKey();
@@ -75,18 +76,21 @@ Widget orbitApp() {
               if (context.mounted) Provider.of<DotsModel>(context, listen: false).addDot(newDot);
             },
             child: MaterialApp(
-              theme: ThemeData(scaffoldBackgroundColor: Colors.white),
+              theme: ThemeData(scaffoldBackgroundColor: Colors.white, fontFamily: "SFPro"),
               home: Scaffold(
                 body: MouseRegion(
                   cursor: SystemMouseCursors.none,
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        flex: 2,
-                        child: OrbitView(),
-                      ),
-                      Expanded(flex: 1, child: panelView())
-                    ],
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          flex: 2,
+                          child: OrbitView(),
+                        ),
+                        Expanded(flex: 1, child: panelView())
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -134,15 +138,9 @@ class OrbitView extends StatelessWidget {
   }
 }
 
-Widget panelView() {
-  return const Placeholder(
-    child: Center(),
-  );
-}
-
 Widget orbitalRing() {
   return Padding(
-    padding: const EdgeInsets.all(32),
+    padding: const EdgeInsets.only(top: 16.0, bottom: 16.0),
     child: Container(
       key: orbitalRingKey,
       decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(width: 3, color: const Color.fromRGBO(0, 0, 0, 0.1))),
